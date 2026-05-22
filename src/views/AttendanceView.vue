@@ -3,7 +3,7 @@ import { ref, onMounted, computed } from "vue";
 import { useRouter } from "vue-router";
 
 const router = useRouter();
-const API = "https://davomat-djang1.onrender.com/api";
+const API = "https://davomat-djang1-4.onrender.com/api";
 
 const user = JSON.parse(localStorage.getItem("user") || "null");
 if (!user) router.push("/login");

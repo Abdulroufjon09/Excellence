@@ -3,7 +3,7 @@ import { reactive, ref, onMounted, computed } from "vue";
 import { useRouter } from "vue-router";
 
 const router = useRouter();
-const API = "https://davomat-djang1.onrender.com/api";
+const API = "https://davomat-djang1-4.onrender.com/api";
 
 const ADMIN_PASSWORD = "excel2024";
 const EXCELLENCE_PASSWORD = "excellence2024";
