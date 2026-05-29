@@ -250,11 +250,8 @@ function triggerError() {
   setTimeout(() => (errorStyle.value = false), 1500);
 }
 </script>
-
 <template>
-  <div
-    class="w-full max-w-[360px] bg-white border border-gray-100 rounded-2xl overflow-hidden mx-4"
-  >
+  <div class="min-h-screen flex items-center justify-center bg-gray-50">
     <div
       class="w-[360px] bg-white border border-gray-100 rounded-2xl overflow-hidden"
     >
