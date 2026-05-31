@@ -1,53 +1,42 @@
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { useRouter } from "vue-router";
 
 const router = useRouter();
-
 const API = "https://davomat-djang1-4.onrender.com/api";
-
 const user = JSON.parse(localStorage.getItem("user") || "{}");
 
-// auth
-if (!user?.id) {
-  router.push("/login");
-}
+if (!user?.id) router.push("/login");
 
-// ─────────────────────────────
-// STATE
-// ─────────────────────────────
-
+// ─── STATE ───────────────────────────────────────
 const students = ref([]);
 const payments = ref([]);
+const myPenalties = ref([]);
+const teacherName = ref("");
 
 const loadingStudents = ref(true);
 const loadingPayments = ref(true);
+const loadingPenalties = ref(true);
 
 const activeTab = ref("students");
 
-// ─────────────────────────────
-// COLORS
-// ─────────────────────────────
-
 const avatarColors = [
-  { backgroundColor: "#EEEDFE", color: "#3C3489" },
-  { backgroundColor: "#E1F5EE", color: "#085041" },
-  { backgroundColor: "#FAECE7", color: "#712B13" },
-  { backgroundColor: "#E6F1FB", color: "#0C447C" },
-  { backgroundColor: "#FAEEDA", color: "#633806" },
+  { bg: "#ede9fe", color: "#5b21b6" },
+  { bg: "#dcfce7", color: "#15803d" },
+  { bg: "#fee2e2", color: "#b91c1c" },
+  { bg: "#dbeafe", color: "#1d4ed8" },
+  { bg: "#fef3c7", color: "#b45309" },
+  { bg: "#fce7f3", color: "#9d174d" },
 ];
 
-// ─────────────────────────────
-// FETCH DATA
-// ─────────────────────────────
-
+// ─── FETCH ───────────────────────────────────────
 async function fetchStudents() {
   loadingStudents.value = true;
-
   try {
-    const res = await fetch(`${API}/students/?teacher_id=${user.teacher_id}`);
-
-    students.value = await res.json();
+    const res = await fetch(`${API}/students/?teacher=${user.teacher_id}`);
+    const data = await res.json();
+    students.value = data;
+    if (data.length > 0) teacherName.value = data[0].teacher_name;
   } catch (e) {
     console.error(e);
   } finally {
@@ -57,10 +46,8 @@ async function fetchStudents() {
 
 async function fetchPayments() {
   loadingPayments.value = true;
-
   try {
     const res = await fetch(`${API}/payments/${user.id}/`);
-
     payments.value = await res.json();
   } catch (e) {
     console.error(e);
@@ -69,23 +56,30 @@ async function fetchPayments() {
   }
 }
 
-onMounted(async () => {
-  await Promise.all([fetchStudents(), fetchPayments()]);
+async function fetchPenalties() {
+  loadingPenalties.value = true;
+  try {
+    const res = await fetch(`${API}/penalties/student/${user.id}/`);
+    myPenalties.value = await res.json();
+  } catch (e) {
+    console.error(e);
+  } finally {
+    loadingPenalties.value = false;
+  }
+}
+
+onMounted(() => {
+  Promise.all([fetchStudents(), fetchPayments(), fetchPenalties()]);
 });
 
-// ─────────────────────────────
-// HELPERS
-// ─────────────────────────────
-
+// ─── HELPERS ─────────────────────────────────────
 function logout() {
   localStorage.removeItem("user");
   router.push("/login");
 }
 
-function initials(student) {
-  return (
-    (student.name?.[0] || "") + (student.surname?.[0] || "")
-  ).toUpperCase();
+function initials(s) {
+  return ((s.name?.[0] || "") + (s.surname?.[0] || "")).toUpperCase();
 }
 
 function formatMoney(value) {
@@ -94,310 +88,528 @@ function formatMoney(value) {
 
 function formatMonth(month) {
   if (!month) return "";
-
   const [year, mon] = month.split("-");
-
-  const months = [
-    "Yanvar",
-    "Fevral",
-    "Mart",
-    "Aprel",
-    "May",
-    "Iyun",
-    "Iyul",
-    "Avgust",
-    "Sentabr",
-    "Oktabr",
-    "Noyabr",
-    "Dekabr",
-  ];
-
+  const months = ["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr"];
   return `${months[parseInt(mon) - 1]} ${year}`;
 }
 
 function formatDate(date) {
   if (!date) return "";
-
-  let cleaned = date.replace(" ", "T");
-
-  const d = new Date(cleaned);
+  const d = new Date(date.replace(" ", "T"));
   if (isNaN(d.getTime())) return date;
-
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate() - 1).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
-function stageStyle(stage) {
-  if (stage <= 2) {
-    return {
-      backgroundColor: "#E1F5EE",
-      color: "#085041",
-    };
-  }
-
-  if (stage <= 4) {
-    return {
-      backgroundColor: "#E6F1FB",
-      color: "#0C447C",
-    };
-  }
-
-  return {
-    backgroundColor: "#FAEEDA",
-    color: "#633806",
-  };
+function stageColor(stage) {
+  if (stage <= 2) return { bg: "#dcfce7", color: "#15803d" };
+  if (stage <= 4) return { bg: "#dbeafe", color: "#1d4ed8" };
+  return { bg: "#fef3c7", color: "#b45309" };
 }
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto p-4 sm:p-6">
+  <div class="cab-wrap">
     <!-- HEADER -->
-    <div class="flex items-center justify-between mb-8">
-      <div v-if="user.is_admin" class="flex items-center gap-3">
-        <RouterLink
-          to="/admin"
-          class="flex text-gray-600 hover:text-gray-900 transition"
+    <header class="cab-header">
+      <div class="header-left">
+        <button
+          v-if="user.is_admin"
+          @click="$router.push('/admin')"
+          class="back-btn"
+          title="Admin panel"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="1.7em"
-            height="1.7em"
-            viewBox="0 0 48 48"
-          >
-            <path d="M0 0h48v48H0z" fill="none" />
-            <path
-              fill="none"
-              stroke="currentColor"
-              stroke-linejoin="round"
-              stroke-width="4"
-              d="M44 40.836q-7.34-8.96-13.036-10.168t-10.846-.365V41L4 23.545L20.118 7v10.167q9.523.075 16.192 6.833q6.668 6.758 7.69 16.836Z"
-              clip-rule="evenodd"
-            />
-          </svg>
-        </RouterLink>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
         <div>
-          <h1 class="text-xl sm:text-2xl font-semibold">Kabinet</h1>
-          <p class="text-sm text-gray-400 mt-1">
-            Xush kelibsiz, {{ user.name }}
-          </p>
+          <h1 class="header-title">Kabinet</h1>
+          <p class="header-sub">Xush kelibsiz, {{ user.name }}</p>
         </div>
       </div>
-      <button
-        @click="logout"
-        class="border border-gray-200 px-4 py-2 rounded-xl text-sm hover:bg-gray-50 transition ml-auto"
-      >
+      <button @click="logout" class="btn-ghost">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         Chiqish
       </button>
-    </div>
+    </header>
 
-    <!-- PROFILE -->
-    <div
-      class="border border-gray-100 rounded-2xl p-4 sm:p-5 mb-6 flex items-center gap-4"
-    >
+    <!-- PROFILE CARD -->
+    <div class="profile-card">
       <div
-        class="w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center font-semibold shrink-0"
-        :style="avatarColors[0]"
+        class="profile-avatar"
+        :style="{ background: avatarColors[0].bg, color: avatarColors[0].color }"
       >
         {{ (user.name?.[0] || "").toUpperCase() }}
       </div>
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2">
-          <p class="font-medium text-base sm:text-lg truncate">
-            {{ user.name }} {{ user.surname }}
-          </p>
-          <p class="text-yellow-500" v-if="user.is_admin">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="1em"
-              height="1em"
-              viewBox="0 0 24 24"
-            >
-              <path d="M0 0h24v24H0z" fill="none" />
-              <path
-                fill="currentColor"
-                d="m12 17.275l-4.15 2.5q-.275.175-.575.15t-.525-.2t-.35-.437t-.05-.588l1.1-4.725L3.775 10.8q-.25-.225-.312-.513t.037-.562t.3-.45t.55-.225l4.85-.425l1.875-4.45q.125-.3.388-.45t.537-.15t.537.15t.388.45l1.875 4.45l4.85.425q.35.05.55.225t.3.45t.038.563t-.313.512l-3.675 3.175l1.1 4.725q.075.325-.05.588t-.35.437t-.525.2t-.575-.15z"
-              />
-            </svg>
-          </p>
+      <div class="profile-info">
+        <div class="profile-name-row">
+          <span class="profile-name">{{ user.name }} {{ user.surname }}</span>
+          <span v-if="user.is_admin" class="badge badge--admin">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="m12 17.275-4.15 2.5q-.275.175-.575.15t-.525-.2t-.35-.437t-.05-.588l1.1-4.725L3.775 10.8q-.25-.225-.312-.513t.037-.562t.3-.45t.55-.225l4.85-.425 1.875-4.45q.125-.3.388-.45t.537-.15t.537.15t.388.45l1.875 4.45 4.85.425q.35.05.55.225t.3.45t.038.563t-.313.512l-3.675 3.175 1.1 4.725q.075.325-.05.588t-.35.437t-.525.2t-.575-.15z"/></svg>
+            Admin
+          </span>
         </div>
-        <p class="text-sm text-gray-400">{{ user.phone }}</p>
+        <p class="profile-phone">{{ user.phone }}</p>
+        <p v-if="!user.is_admin" class="profile-teacher">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:-1px;margin-right:3px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          {{ teacherName }}
+        </p>
       </div>
     </div>
 
     <!-- TABS -->
-    <div class="flex gap-3 mb-6">
+    <div class="tabs">
       <button
         @click="activeTab = 'students'"
-        :class="[
-          'px-4 sm:px-5 py-2 rounded-full border text-sm transition',
-          activeTab === 'students'
-            ? 'bg-black text-white border-black'
-            : 'border-gray-200 text-gray-600 hover:bg-gray-50',
-        ]"
+        class="tab-btn"
+        :class="{ active: activeTab === 'students' }"
       >
-        👥 Guruh
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Guruh
       </button>
-      <div class="" v-if="!user.is_admin">
-        <button
-          @click="activeTab = 'payments'"
-          :class="[
-            'px-4 sm:px-5 py-2 rounded-full border text-sm transition',
-            activeTab === 'payments'
-              ? 'bg-black text-white border-black'
-              : 'border-gray-200 text-gray-600 hover:bg-gray-50',
-          ]"
-        >
-          💳 To'lovlar
-        </button>
-      </div>
+      <button
+        v-if="!user.is_admin"
+        @click="activeTab = 'payments'"
+        class="tab-btn"
+        :class="{ active: activeTab === 'payments' }"
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+        To'lovlar
+      </button>
+      <button
+        v-if="!user.is_admin"
+        @click="activeTab = 'penalties'"
+        class="tab-btn"
+        :class="{ active: activeTab === 'penalties' }"
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Ja'zolar
+        <span v-if="myPenalties.length" class="tab-count">{{ myPenalties.length }}</span>
+      </button>
     </div>
 
-    <!-- STUDENTS -->
+    <!-- ── STUDENTS TAB ── -->
     <div v-if="activeTab === 'students'">
-      <div class="mb-4 text-sm text-gray-400">
-        {{ students.length }} ta o'quvchi
+      <p class="tab-meta">{{ students.length }} ta o'quvchi</p>
+      <div v-if="loadingStudents" class="loading-state">
+        <div class="spinner"></div> Yuklanmoqda...
       </div>
-      <div class="border border-gray-100 rounded-2xl table-wrapper">
-        <div v-if="loadingStudents" class="text-center py-10 text-gray-400">
-          Yuklanmoqda...
-        </div>
-        <table
-          v-else-if="students.length > 0"
-          class="w-full text-sm min-w-[360px] responsive-table"
-        >
-          <thead class="bg-gray-50">
+      <div v-else-if="students.length === 0" class="empty-state">O'quvchilar yo'q</div>
+      <div v-else class="student-table-wrap">
+        <table class="student-table">
+          <thead>
             <tr>
-              <th class="text-left px-4 py-3">#</th>
-              <th class="text-left px-4 py-3">O'quvchi</th>
-              <div class="" v-if="user.is_admin">
-                <th class="text-left px-4 py-3">Raqam</th>
-              </div>
-              <th class="text-left px-4 py-3">Etap</th>
+              <th>#</th>
+              <th>O'quvchi</th>
+              <th v-if="user.is_admin">Telefon</th>
+              <th>Etap</th>
             </tr>
           </thead>
           <tbody>
-            <tr
-              v-for="(student, index) in students"
-              :key="student.id"
-              class="border-t border-gray-100 hover:bg-gray-50 transition"
-            >
-              <td class="px-4 py-4 text-gray-400">{{ index + 1 }}</td>
-              <td class="px-4 py-4">
-                <div class="flex items-center gap-3">
+            <tr v-for="(s, i) in students" :key="s.id">
+              <td class="td-num">{{ i + 1 }}</td>
+              <td>
+                <div class="student-row">
                   <div
-                    class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
-                    :style="avatarColors[index % avatarColors.length]"
+                    class="s-avatar"
+                    :style="{ background: avatarColors[i % avatarColors.length].bg, color: avatarColors[i % avatarColors.length].color }"
                   >
-                    {{ initials(student) }}
+                    {{ initials(s) }}
                   </div>
-                  <p class="font-medium">
-                    {{ student.name }} {{ student.surname }}
-                  </p>
+                  <span class="s-name">{{ s.name }} {{ s.surname }}</span>
                 </div>
               </td>
-              <div class="" v-if="user.is_admin">
-                <td class="px-4 py-4">
-                  <span
-                    class="px-3 py-1 rounded-full text-xs font-medium"
-                    :style="stageStyle(student.stage)"
-                  >
-                    {{ student.phone }}
-                  </span>
-                </td>
-              </div>
-              <td class="px-4 py-4">
+              <td v-if="user.is_admin" class="td-phone">{{ s.phone }}</td>
+              <td>
                 <span
-                  class="px-3 py-1 rounded-full text-xs font-medium"
-                  :style="stageStyle(student.stage)"
+                  class="stage-pill"
+                  :style="{ background: stageColor(s.stage).bg, color: stageColor(s.stage).color }"
                 >
-                  {{ student.stage }}-etap
+                  {{ s.stage }}-etap
                 </span>
               </td>
             </tr>
           </tbody>
         </table>
-        <div v-else class="text-center py-10 text-gray-400">
-          O'quvchilar yo'q
+      </div>
+    </div>
+
+    <!-- ── PAYMENTS TAB ── -->
+    <div v-if="activeTab === 'payments'">
+      <div v-if="loadingPayments" class="loading-state">
+        <div class="spinner"></div> Yuklanmoqda...
+      </div>
+      <div v-else-if="payments.length === 0" class="empty-state">
+        Hozircha to'lovlar mavjud emas
+      </div>
+      <div v-else class="payments-list">
+        <div v-for="p in payments" :key="p.id" class="payment-card">
+          <div class="payment-top">
+            <div>
+              <p class="payment-month">{{ formatMonth(p.month) }}</p>
+              <p class="payment-stage">{{ p.stage }}-etap</p>
+            </div>
+            <div class="payment-status-col">
+              <span
+                class="payment-status"
+                :class="p.is_paid ? 'paid' : 'unpaid'"
+              >
+                {{ p.is_paid ? "To'langan ✓" : "To'lanmagan" }}
+              </span>
+              <p v-if="p.paid_at" class="payment-date">{{ formatDate(p.paid_at) }}</p>
+            </div>
+          </div>
+          <div class="payment-divider"></div>
+          <div class="payment-bottom">
+            <p class="payment-label">To'lov summasi</p>
+            <p class="payment-amount">{{ formatMoney(p.amount_due) }}</p>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- PAYMENTS -->
-    <div v-if="activeTab === 'payments'">
-      <div v-if="loadingPayments" class="text-center py-10 text-gray-400">
-        Yuklanmoqda...
+    <!-- ── PENALTIES TAB ── -->
+    <div v-if="activeTab === 'penalties'">
+      <div v-if="loadingPenalties" class="loading-state">
+        <div class="spinner"></div> Yuklanmoqda...
       </div>
-      <div v-else-if="payments.length > 0" class="space-y-4">
-        <div
-          v-for="payment in payments"
-          :key="payment.id"
-          class="border border-gray-100 rounded-2xl p-4 sm:p-5"
-        >
-          <div class="flex items-start justify-between mb-5 gap-3">
-            <div>
-              <p class="font-semibold text-base sm:text-lg">
-                {{ formatMonth(payment.month) }}
-              </p>
-              <p class="text-sm text-gray-400 mt-1">{{ payment.stage }}-etap</p>
+      <div v-else-if="myPenalties.length === 0" class="empty-state">
+        Ja'zolar yo'q
+      </div>
+      <div v-else>
+        <div class="penalty-summary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span>Jami <strong>{{ myPenalties.length }}</strong> ta ogohlantirish</span>
+        </div>
+        <div class="penalties-list">
+          <div v-for="p in myPenalties" :key="p.id" class="my-penalty-card">
+            <div class="my-penalty-left">
+              <span class="my-penalty-reason">{{ p.reason_display }}</span>
+              <p v-if="p.description" class="my-penalty-desc">{{ p.description }}</p>
             </div>
-            <div class="text-right shrink-0">
-              <div
-                :class="[
-                  'px-3 py-1 rounded-full text-xs font-medium inline-block',
-                  payment.is_paid
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-red-100 text-red-600',
-                ]"
-              >
-                {{
-                  payment.is_paid ? "To'lov qilingan ✓" : "To'lov qilinmagan"
-                }}
-              </div>
-              <p v-if="payment.paid_at" class="text-xs text-gray-400 mt-2">
-                {{ formatDate(payment.paid_at) }}
-              </p>
-            </div>
-          </div>
-          <div>
-            <p class="text-sm text-gray-400 mb-1">To'lov summasi</p>
-            <p class="text-2xl sm:text-3xl font-bold">
-              {{ formatMoney(payment.amount_due) }}
-            </p>
+            <p class="my-penalty-date">{{ p.date }}</p>
           </div>
         </div>
-      </div>
-      <div v-else class="text-center py-10 text-gray-400">
-        Hozircha to'lovlar mavjud emas
       </div>
     </div>
   </div>
 </template>
 
-<style>
-/* desktop normal */
-.table-wrapper {
+<style scoped>
+/* ── BASE ── */
+.cab-wrap {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 16px 80px;
+  font-family: 'Inter', -apple-system, sans-serif;
+}
+
+/* ── HEADER ── */
+.cab-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 0 20px;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 20px;
+}
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.header-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #111;
+  margin: 0;
+  letter-spacing: -0.3px;
+}
+.header-sub {
+  font-size: 13px;
+  color: #999;
+  margin: 2px 0 0;
+}
+.back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid #e5e5e5;
+  background: transparent;
+  color: #555;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.back-btn:hover { background: #f5f5f5; }
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: #666;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-ghost:hover { background: #f5f5f5; }
+
+/* ── PROFILE ── */
+.profile-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid #ebebeb;
+  border-radius: 16px;
+  margin-bottom: 20px;
+  background: #fff;
+}
+.profile-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.profile-info { flex: 1; min-width: 0; }
+.profile-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.profile-name { font-size: 16px; font-weight: 600; color: #111; }
+.badge--admin {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #b45309;
+  background: #fef3c7;
+  padding: 3px 8px;
+  border-radius: 20px;
+}
+.profile-phone { font-size: 13px; color: #888; margin: 4px 0 0; }
+.profile-teacher { font-size: 12px; color: #aaa; margin: 3px 0 0; }
+
+/* ── TABS ── */
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1px solid #e5e5e5;
+  background: transparent;
+  color: #666;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tab-btn:hover { background: #f5f5f5; }
+.tab-btn.active {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+.tab-count {
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+/* ── TAB META ── */
+.tab-meta {
+  font-size: 12px;
+  color: #aaa;
+  margin: 0 0 12px;
+}
+
+/* ── STUDENTS TABLE ── */
+.student-table-wrap {
+  border: 1px solid #ebebeb;
+  border-radius: 14px;
+  overflow: hidden;
   overflow-x: auto;
 }
+.student-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 340px;
+}
+.student-table thead {
+  background: #f9f9f9;
+}
+.student-table th {
+  padding: 11px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-bottom: 1px solid #ebebeb;
+}
+.student-table tr + tr td {
+  border-top: 1px solid #f3f3f3;
+}
+.student-table td {
+  padding: 12px 16px;
+  font-size: 14px;
+}
+.student-table tbody tr:hover { background: #fafafa; }
+.td-num { color: #bbb; font-size: 13px; width: 40px; }
+.td-phone { color: #666; font-size: 13px; }
 
-/* kichik ekran */
-@media (max-width: 768px) {
-  .responsive-table {
-    min-width: 600px;
-  }
+.student-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.s-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.s-name { font-size: 14px; font-weight: 500; color: #111; }
+
+.stage-pill {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
-/* telefon (eng kichik) */
-@media (max-width: 480px) {
-  .responsive-table {
-    min-width: 520px;
-  }
+/* ── PAYMENTS ── */
+.payments-list { display: flex; flex-direction: column; gap: 12px; }
+.payment-card {
+  border: 1px solid #ebebeb;
+  border-radius: 14px;
+  padding: 18px 20px;
+  background: #fff;
+}
+.payment-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+.payment-month { font-size: 17px; font-weight: 600; color: #111; margin: 0; }
+.payment-stage { font-size: 12px; color: #aaa; margin: 4px 0 0; }
+.payment-status-col { text-align: right; }
+.payment-status {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 20px;
+}
+.payment-status.paid { background: #dcfce7; color: #15803d; }
+.payment-status.unpaid { background: #fee2e2; color: #dc2626; }
+.payment-date { font-size: 11px; color: #bbb; margin: 5px 0 0; }
+.payment-divider { height: 1px; background: #f0f0f0; margin-bottom: 14px; }
+.payment-label { font-size: 12px; color: #aaa; margin: 0 0 4px; }
+.payment-amount { font-size: 28px; font-weight: 700; color: #111; margin: 0; letter-spacing: -0.5px; }
 
-  .responsive-table th,
-  .responsive-table td {
-    padding: 10px 8px;
-    font-size: 12px;
-  }
+/* ── PENALTIES ── */
+.penalty-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  color: #92400e;
+}
+.penalty-summary strong { color: #78350f; }
+
+.penalties-list { display: flex; flex-direction: column; gap: 8px; }
+.my-penalty-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  background: #fff7ed;
+}
+.my-penalty-left { flex: 1; }
+.my-penalty-reason {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #c2410c;
+  background: #ffedd5;
+  padding: 4px 10px;
+  border-radius: 6px;
+  margin-bottom: 5px;
+}
+.my-penalty-desc { font-size: 13px; color: #666; margin: 4px 0 0; }
+.my-penalty-date { font-size: 12px; color: #aaa; white-space: nowrap; padding-left: 12px; flex-shrink: 0; }
+
+/* ── STATES ── */
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px 16px;
+  color: #bbb;
+  font-size: 13px;
+}
+.empty-state {
+  text-align: center;
+  padding: 48px 16px;
+  color: #ccc;
+  font-size: 14px;
+}
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #e5e5e5;
+  border-top-color: #999;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 480px) {
+  .profile-card { padding: 14px; }
+  .payment-amount { font-size: 22px; }
+  .tabs { gap: 5px; }
+  .tab-btn { padding: 8px 12px; font-size: 12px; }
 }
 </style>
