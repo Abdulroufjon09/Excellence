@@ -864,4 +864,12 @@ function stageColor(stage) {
   justify-content: space-between;
   gap: 10px;
 }
+
+.num_exam a {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #888;
+  transition: color 0.15s;
+}
 </style>
